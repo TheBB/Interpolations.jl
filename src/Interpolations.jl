@@ -12,10 +12,12 @@ export
     ExtrapError,
     ExtrapNaN,
     ExtrapConstant,
+    ExtrapLinear,
     OnCell,
     OnGrid,
     ExtendInner,
-    Flat
+    Flat,
+    LinearBC
 
 abstract Degree{N}
 
@@ -27,6 +29,7 @@ abstract BoundaryCondition
 type None <: BoundaryCondition end
 type ExtendInner <: BoundaryCondition end
 type Flat <: BoundaryCondition end
+type LinearBC <: BoundaryCondition end
 
 abstract InterpolationType{D<:Degree,BC<:BoundaryCondition,GR<:GridRepresentation}
 
@@ -66,9 +69,19 @@ include("quadratic.jl")
 
 
 # This creates getindex methods for all supported combinations
-for IT in (Constant{OnCell},Linear{OnGrid},Quadratic{ExtendInner,OnCell},Quadratic{Flat,OnCell})
-    for EB in (ExtrapError,ExtrapNaN,ExtrapConstant)
-
+for IT in (
+        Constant{OnCell},
+        Linear{OnGrid},
+        Quadratic{ExtendInner,OnCell},
+        Quadratic{Flat,OnCell},
+        Quadratic{LinearBC,OnCell}
+    )
+    for EB in (
+            ExtrapError,
+            ExtrapNaN,
+            ExtrapConstant,
+            ExtrapLinear
+        )
         eval(:(function getindex{T}(itp::Interpolation{T,1,$IT,$EB}, x::Real, d)
             d == 1 || throw(BoundsError())
             itp[x]
@@ -107,7 +120,11 @@ for IT in (Constant{OnCell},Linear{OnGrid},Quadratic{ExtendInner,OnCell},Quadrat
 end
 
 # This creates prefilter specializations for all interpolation types that need them
-for IT in (Quadratic{ExtendInner,OnCell},Quadratic{Flat,OnCell})
+for IT in (
+        Quadratic{ExtendInner,OnCell},
+        Quadratic{Flat,OnCell},
+        Quadratic{LinearBC,OnCell}
+    )
     @ngenerate N promote_type_grid(T, x...) function prefilter{T,N}(A::Array{T,N},it::IT)
         ret = similar(A)
         szs = collect(size(A))

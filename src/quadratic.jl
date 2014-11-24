@@ -26,16 +26,6 @@ function indices(::Quadratic{ExtendInner,OnCell}, N)
     end
 end
 
-function coefficients(::Quadratic{ExtendInner,OnCell}, N)
-    quote
-        @nexprs $N d->begin
-            cm_d = (fx_d-.5)^2 / 2
-            c_d = 0.75 - fx_d^2
-            cp_d = (fx_d+.5)^2 / 2
-        end
-    end
-end
-
 function bc_gen(::Quadratic{Flat,OnCell}, N)
     quote
         # After extrapolation has been handled, 1 <= x_d <= size(itp,d)
@@ -63,8 +53,42 @@ function indices(::Quadratic{Flat,OnCell}, N)
     end
 end
 
+function bc_gen(::Quadratic{LinearBC,OnCell}, N)
+    quote
+         @nexprs $N d->begin
+            if x_d < 1
+                # extrapolate towards -∞
+                fx_d = x_d - convert(typeof(x_d), 1)
+                k = itp[2] - itp[1]
 
-function coefficients(::Quadratic{Flat,OnCell}, N)
+                return itp[1] + k * fx_d
+            end
+            if x_d > size(itp, d)
+                # extrapolate towards ∞
+                s_d = size(itp, d)
+                fx_d = x_d - convert(typeof(x_d), s_d)
+                k = itp[s_d] - itp[s_d - 1]
+
+                return itp[s_d] + k * fx_d
+            end
+
+            ix_d = iround(x_d)
+         end
+    end
+end
+
+function indices(::Quadratic{LinearBC,OnCell}, N)
+    quote
+        @nexprs $N d->begin
+            ixp_d = ix_d + 1
+            ixm_d = ix_d - 1
+
+            fx_d = x_d - convert(typeof(x_d), ix_d)
+        end
+    end
+end
+
+function coefficients(::Quadratic, N)
     quote
         @nexprs $N d->begin
             cm_d = (fx_d-.5)^2 / 2
@@ -112,5 +136,13 @@ function prefiltering_system_matrix{T}(::Type{T}, n::Int, q::Quadratic{Flat,OnCe
     dl,d,du = unmodified_system_matrix(T,n,q)
     du[1] += 1/8
     dl[end] += 1/8
+    lufact!(Tridiagonal(dl, d, du))
+end
+
+function prefiltering_system_matrix{T}(::Type{T}, n::Int, q::Quadratic{LinearBC,OnCell})
+    dl,d,du = unmodified_system_matrix(T,n,q)
+
+    d[1] = d[end] = 1
+    du[1] = dl[end] = 0
     lufact!(Tridiagonal(dl, d, du))
 end
